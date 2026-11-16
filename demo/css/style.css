@@ -1,0 +1,88 @@
+/* ConsensusIDP Custom Stylesheet */
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.02); }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s infinite ease-in-out;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Bounding box visual overlay */
+.bounding-box-highlight {
+  position: absolute;
+  border: 1.5px dashed rgba(59, 130, 246, 0.45);
+  background-color: rgba(59, 130, 246, 0.04);
+  border-radius: 3px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 10;
+}
+
+.bounding-box-highlight:hover {
+  border: 2px solid #2563eb;
+  background-color: rgba(37, 99, 235, 0.12);
+  z-index: 25;
+}
+
+.bounding-box-highlight.active {
+  border: 2.5px solid #2563eb;
+  background-color: rgba(37, 99, 235, 0.18);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85), 0 0 16px rgba(37, 99, 235, 0.4);
+  z-index: 30;
+}
+
+.bounding-box-label {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  background: #1e3a8a;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  z-index: 40;
+}
+
+.bounding-box-highlight:hover .bounding-box-label,
+.bounding-box-highlight.active .bounding-box-label {
+  display: block;
+}
+
+.bounding-box-highlight.active .bounding-box-label {
+  background: #2563eb;
+}
+
+/* Row active indicator */
+.cell-row-active {
+  background-color: #eff6ff !important;
+  border-left: 3px solid #2563eb !important;
+}
+
+/* Tooltip transition */
+.tooltip-fade {
+  transition: opacity 0.2s, transform 0.2s;
+}
