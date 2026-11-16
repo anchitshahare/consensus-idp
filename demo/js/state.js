@@ -1,19 +1,19 @@
 /**
  * ConsensusIDP Demo State Store
- * Manages reactive in-memory state with graceful localStorage fallback.
+ * Manages reactive in-memory state with graceful localStorage fallback and strict business validation rules.
  */
 
 class DemoStateStore {
   constructor() {
     this.listeners = [];
-    this.storageKey = "consensus_idp_demo_state_v1";
+    this.storageKey = "consensus_idp_demo_state_v2";
     this.data = null;
     this.currentScenarioId = "lakeside-inn";
     this.currentFileId = null;
     this.currentChildId = null;
     this.activeCellId = null;
     this.currentViewMode = "review"; // "review" | "warehouse"
-    this.filterReason = "all"; // "all" | "discrepancies" | "low_confidence" | "critical" | "missing"
+    this.currentTab = "needs_review"; // "needs_review" | "all"
     this.currentPageNum = 1;
 
     this.init();
@@ -25,7 +25,12 @@ class DemoStateStore {
     try {
       const saved = localStorage.getItem(this.storageKey);
       if (saved) {
-        this.data = JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (parsed && Array.isArray(parsed.scenarios) && parsed.scenarios.length > 0) {
+          this.data = parsed;
+        } else {
+          this.data = JSON.parse(JSON.stringify(rawInitial));
+        }
       } else {
         this.data = JSON.parse(JSON.stringify(rawInitial));
       }
@@ -42,6 +47,31 @@ class DemoStateStore {
         this.currentChildId = sc.files[0].children[0].childId;
         this.currentPageNum = sc.files[0].children[0].pages[0] || 1;
       }
+    }
+
+    // Default active cell to first review item if present
+    this.selectFirstActionableCell();
+  }
+
+  selectFirstActionableCell() {
+    const child = this.getCurrentChild();
+    if (!child) return;
+
+    for (const comp of child.components) {
+      for (const cell of comp.cells) {
+        if (cell.reviewStatus === "needs_review") {
+          this.activeCellId = cell.cellId;
+          if (cell.boundingBox && cell.boundingBox.page) {
+            this.currentPageNum = cell.boundingBox.page;
+          }
+          return;
+        }
+      }
+    }
+
+    // Fallback to first cell if none need review
+    if (child.components[0] && child.components[0].cells[0]) {
+      this.activeCellId = child.components[0].cells[0].cellId;
     }
   }
 
@@ -62,7 +92,8 @@ class DemoStateStore {
     this.data = JSON.parse(JSON.stringify(rawInitial));
     this.activeCellId = null;
     this.currentViewMode = "review";
-    this.filterReason = "all";
+    this.currentTab = "needs_review";
+
     const sc = this.getCurrentScenario();
     if (sc && sc.files && sc.files.length) {
       this.currentFileId = sc.files[0].fileId;
@@ -71,6 +102,8 @@ class DemoStateStore {
         this.currentPageNum = sc.files[0].children[0].pages[0] || 1;
       }
     }
+
+    this.selectFirstActionableCell();
     this.notify();
   }
 
@@ -83,7 +116,11 @@ class DemoStateStore {
 
   notify() {
     for (const fn of this.listeners) {
-      fn(this);
+      try {
+        fn(this);
+      } catch (err) {
+        console.error("State listener error:", err);
+      }
     }
   }
 
@@ -111,7 +148,7 @@ class DemoStateStore {
         this.currentPageNum = 1;
       }
     }
-    this.activeCellId = null;
+    this.selectFirstActionableCell();
     this.notify();
   }
 
@@ -127,7 +164,7 @@ class DemoStateStore {
       this.currentChildId = f.children[0].childId;
       this.currentPageNum = f.children[0].pages[0] || 1;
     }
-    this.activeCellId = null;
+    this.selectFirstActionableCell();
     this.notify();
   }
 
@@ -143,27 +180,60 @@ class DemoStateStore {
     if (c && c.pages && c.pages.length) {
       this.currentPageNum = c.pages[0];
     }
-    this.activeCellId = null;
+    this.selectFirstActionableCell();
     this.notify();
   }
 
-  setPageNum(page) {
-    this.currentPageNum = page;
+  // Restrict page navigation to pages belonging to this child document!
+  getChildPages() {
+    const child = this.getCurrentChild();
+    return (child && child.pages && child.pages.length) ? child.pages : [1];
+  }
+
+  getChildPageIndex() {
+    const pages = this.getChildPages();
+    const idx = pages.indexOf(this.currentPageNum);
+    return idx >= 0 ? idx : 0;
+  }
+
+  setChildPageIndex(index) {
+    const pages = this.getChildPages();
+    const clamped = Math.max(0, Math.min(pages.length - 1, index));
+    this.currentPageNum = pages[clamped];
     this.notify();
+  }
+
+  prevChildPage() {
+    const idx = this.getChildPageIndex();
+    if (idx > 0) {
+      this.setChildPageIndex(idx - 1);
+    }
+  }
+
+  nextChildPage() {
+    const idx = this.getChildPageIndex();
+    const pages = this.getChildPages();
+    if (idx < pages.length - 1) {
+      this.setChildPageIndex(idx + 1);
+    }
   }
 
   setActiveCell(cellId) {
     this.activeCellId = cellId;
-    // Auto-switch document page if cell belongs to a different page
+    // Auto-switch document page if cell belongs to a different page within the child
     const cell = this.getCellById(cellId);
     if (cell && cell.boundingBox && cell.boundingBox.page) {
-      this.currentPageNum = cell.boundingBox.page;
+      const childPages = this.getChildPages();
+      if (childPages.includes(cell.boundingBox.page)) {
+        this.currentPageNum = cell.boundingBox.page;
+      }
     }
     this.notify();
   }
 
-  setFilterReason(reason) {
-    this.filterReason = reason;
+  setTab(tabName) {
+    if (this.currentTab === tabName) return;
+    this.currentTab = tabName;
     this.notify();
   }
 
@@ -195,11 +265,12 @@ class DemoStateStore {
 
     cell.selectedValue = newValue;
     cell.reviewStatus = "approved";
-    if (cell.lineage) {
-      cell.lineage.reviewerId = actionSource;
-      cell.lineage.reviewedAt = new Date().toISOString();
-      cell.lineage.humanOverride = true;
+    if (!cell.lineage) {
+      cell.lineage = {};
     }
+    cell.lineage.reviewerId = actionSource;
+    cell.lineage.reviewedAt = new Date().toISOString();
+    cell.lineage.humanOverride = true;
 
     this.recalculateStatuses();
     this.save();
@@ -210,10 +281,11 @@ class DemoStateStore {
     if (!cell) return;
 
     cell.reviewStatus = "approved";
-    if (cell.lineage) {
-      cell.lineage.reviewerId = "HUMAN_REVIEWER";
-      cell.lineage.reviewedAt = new Date().toISOString();
+    if (!cell.lineage) {
+      cell.lineage = {};
     }
+    cell.lineage.reviewerId = "HUMAN_REVIEWER";
+    cell.lineage.reviewedAt = new Date().toISOString();
 
     this.recalculateStatuses();
     this.save();
@@ -224,32 +296,69 @@ class DemoStateStore {
     if (!cell) return;
 
     cell.reviewStatus = "needs_review";
-    cell.reviewReason = "mismatch";
+    if (!cell.reviewReason) cell.reviewReason = "mismatch";
     this.recalculateStatuses();
     this.save();
   }
 
+  // Critical fields MUST NEVER be automatically approved through bulk approval!
   approveAllInChild(childId) {
     const child = this.getCurrentChild();
-    if (!child || child.childId !== childId) return;
+    if (!child || child.childId !== childId) {
+      return { approvedCount: 0, skippedCriticalCount: 0 };
+    }
+
+    let approvedCount = 0;
+    let skippedCriticalCount = 0;
 
     for (const comp of child.components) {
       for (const cell of comp.cells) {
-        cell.reviewStatus = "approved";
-        if (cell.lineage) {
-          cell.lineage.reviewerId = cell.lineage.reviewerId || "HUMAN_BULK_APPROVE";
+        if (cell.reviewStatus === "needs_review") {
+          if (cell.critical) {
+            // CRITICAL FIELDS REQUIRE EXPLICIT INDIVIDUAL HUMAN REVIEW
+            skippedCriticalCount++;
+            continue;
+          }
+          cell.reviewStatus = "approved";
+          if (!cell.lineage) cell.lineage = {};
+          cell.lineage.reviewerId = "HUMAN_BULK_APPROVE_ELIGIBLE";
           cell.lineage.reviewedAt = new Date().toISOString();
+          approvedCount++;
         }
       }
     }
 
     this.recalculateStatuses();
     this.save();
+
+    return { approvedCount, skippedCriticalCount };
   }
 
+  // Publishing must NOT mark a document as published while mandatory review items remain!
   publishChild(childId) {
     const child = this.getCurrentChild();
-    if (!child || child.childId !== childId) return;
+    if (!child || child.childId !== childId) {
+      return { success: false, reason: "Document not found." };
+    }
+
+    const unresolvedCells = [];
+    for (const comp of child.components) {
+      for (const cell of comp.cells) {
+        if (cell.reviewStatus === "needs_review") {
+          unresolvedCells.push(cell);
+        }
+      }
+    }
+
+    if (unresolvedCells.length > 0) {
+      const criticalCount = unresolvedCells.filter((c) => c.critical).length;
+      return {
+        success: false,
+        reason: `Cannot publish: ${unresolvedCells.length} field(s) require review (${criticalCount} critical).`,
+        unresolvedCount: unresolvedCells.length,
+        criticalCount,
+      };
+    }
 
     child.publishStatus = "published";
     const f = this.getCurrentFile();
@@ -259,6 +368,8 @@ class DemoStateStore {
 
     this.recalculateStatuses();
     this.save();
+
+    return { success: true };
   }
 
   recalculateStatuses() {
@@ -326,6 +437,38 @@ class DemoStateStore {
       discrepanciesCount,
       lowConfidenceCount,
       criticalCount,
+    };
+  }
+
+  // Helpers for current child document status
+  getCurrentChildSummary() {
+    const child = this.getCurrentChild();
+    if (!child) return { total: 0, needsReview: 0, criticalNeedsReview: 0, approved: 0, isReadyToPublish: false };
+
+    let total = 0;
+    let needsReview = 0;
+    let criticalNeedsReview = 0;
+    let approved = 0;
+
+    for (const comp of child.components) {
+      for (const cell of comp.cells) {
+        total++;
+        if (cell.reviewStatus === "needs_review") {
+          needsReview++;
+          if (cell.critical) criticalNeedsReview++;
+        } else {
+          approved++;
+        }
+      }
+    }
+
+    return {
+      total,
+      needsReview,
+      criticalNeedsReview,
+      approved,
+      isReadyToPublish: needsReview === 0,
+      isPublished: child.publishStatus === "published",
     };
   }
 }
