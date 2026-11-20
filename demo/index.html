@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ConsensusIDP · Enterprise Document Intelligence & Consensus AI Engine</title>
+  <title>ConsensusIDP — Enterprise Document Intelligence</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300..700;1,14..32,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
   <script>
     tailwind.config = {
@@ -16,194 +16,71 @@
           fontFamily: {
             sans: ['Inter', 'system-ui', 'sans-serif'],
             mono: ['JetBrains Mono', 'monospace'],
-          },
-          colors: {
-            primary: {
-              50: '#eff6ff',
-              100: '#dbeafe',
-              500: '#3b82f6',
-              600: '#2563eb',
-              700: '#1d4ed8',
-              800: '#1e40af',
-              900: '#1e3a8a',
-            }
           }
         }
       }
     };
   </script>
 </head>
-<body class="bg-slate-100 text-slate-900 font-sans h-screen flex flex-col overflow-hidden">
+<body class="bg-slate-50 font-sans flex flex-col min-h-screen">
 
-  <!-- Illustrative Disclaimer Banner -->
-  <aside aria-label="Demo Disclaimer" class="bg-amber-500/10 border-b border-amber-300/60 px-4 py-1 text-center text-xs text-amber-900 font-medium flex items-center justify-center gap-2">
-    <svg class="w-3.5 h-3.5 text-amber-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
-    <span><strong>Illustrative Portfolio Demo:</strong> Preloaded recorded model outputs from dual foundation models (Anthropic Claude Sonnet 4.5 &amp; OpenAI GPT-4o). Zero live inference calls. Zero private company infrastructure.</span>
-    <span class="hidden md:inline text-amber-700/70">|</span>
-    <span class="hidden md:inline text-amber-800">Clean-room portfolio implementation for Senior Product Manager evaluation.</span>
-  </aside>
-
-  <!-- Top Application Header -->
-  <header class="bg-white border-b border-slate-200 px-5 py-2.5 flex items-center justify-between flex-shrink-0 shadow-sm z-30">
-    <div class="flex items-center gap-4">
-      <div class="flex items-center gap-2.5">
-        <div class="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-sm font-bold text-sm tracking-wider">
-          C
-        </div>
-        <div>
-          <h1 class="text-sm font-bold text-slate-900 leading-tight">ConsensusIDP</h1>
-          <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Enterprise Consensus AI Engine</span>
-        </div>
-      </div>
-
-      <div class="h-6 w-px bg-slate-200 mx-1"></div>
-
-      <!-- Scenario Selector -->
-      <div class="flex items-center gap-2">
-        <label for="scenarioSelector" class="text-xs font-semibold text-slate-500">Scenario:</label>
-        <select id="scenarioSelector" class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm">
-          <!-- Populated by app.js -->
-        </select>
-      </div>
-
-      <!-- View Mode Toggle -->
-      <nav aria-label="View Switcher" class="inline-flex rounded-lg bg-slate-100 p-0.5 border border-slate-200 text-xs">
-        <button id="btnReviewMode" class="rounded-md px-3 py-1 font-semibold transition-all bg-white text-blue-600 shadow-sm">
-          Review Queue (HITL)
-        </button>
-        <button id="btnWarehouseMode" class="rounded-md px-3 py-1 font-medium text-slate-500 hover:text-slate-800 transition-all">
-          Warehouse Table
-        </button>
-      </nav>
-    </div>
-
-    <!-- Right Header Actions & KPI Badges -->
-    <div class="flex items-center gap-3">
-      <!-- Status Badges -->
-      <div class="hidden md:flex items-center gap-2 text-xs">
-        <div class="rounded-md bg-amber-50 border border-amber-200 px-2 py-0.5 flex items-center gap-1.5" title="Fields requiring human verification">
-          <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-          <span class="font-bold text-amber-900" id="kpiNeedsReview">0</span>
-          <span class="text-[11px] text-amber-700">Needs Review</span>
-        </div>
-        <div class="rounded-md bg-rose-50 border border-rose-200 px-2 py-0.5 flex items-center gap-1.5" title="Fields with model discrepancies">
-          <span class="w-2 h-2 rounded-full bg-rose-500"></span>
-          <span class="font-bold text-rose-900" id="kpiDiscrepancies">0</span>
-          <span class="text-[11px] text-rose-700">Discrepancies</span>
-        </div>
-        <div class="rounded-md bg-emerald-50 border border-emerald-200 px-2 py-0.5 flex items-center gap-1.5" title="Fields verified via consensus or human review">
-          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-          <span class="font-bold text-emerald-900" id="kpiApproved">0</span>
-          <span class="text-[11px] text-emerald-700">Approved</span>
-        </div>
-        <div class="rounded-md bg-blue-50 border border-blue-200 px-2 py-0.5 flex items-center gap-1.5" title="Published documents">
-          <span class="w-2 h-2 rounded-full bg-blue-500"></span>
-          <span class="font-bold text-blue-900" id="kpiPublished">0</span>
-          <span class="text-[11px] text-blue-700">Published</span>
-        </div>
-      </div>
-
-      <div class="h-5 w-px bg-slate-200"></div>
-
-      <button id="btnApproveAll" class="rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
-        Approve All
-      </button>
-
-      <button id="btnPublish" class="rounded-lg bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1.5">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-        Publish to Warehouse
-      </button>
-
-      <button id="btnResetState" class="text-slate-400 hover:text-slate-600 transition-colors p-1" title="Reset Demo Data">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-      </button>
-    </div>
-  </header>
-
-  <!-- Main Three-Panel Application Body -->
-  <main class="flex-1 flex overflow-hidden">
-
-    <!-- Left Sidebar: Document Backlog & Scenario Details (280px) -->
-    <aside class="w-64 xl:w-72 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 z-20">
-      <!-- Scenario Overview Box -->
-      <div class="p-3.5 border-b border-slate-200 bg-slate-50/70">
-        <div class="flex items-center justify-between mb-1">
-          <span class="rounded bg-blue-100 text-blue-800 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider" id="scenarioCategory">Category</span>
-          <span class="text-[10px] text-slate-400 font-mono">Dual LLM Pipeline</span>
-        </div>
-        <p class="text-[11px] text-slate-600 leading-snug line-clamp-3" id="scenarioDesc">Scenario description...</p>
-      </div>
-
-      <!-- Quick Filter Bar -->
-      <div class="p-2.5 border-b border-slate-200 bg-white">
-        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">Filter Extraction Status:</span>
-        <div class="flex flex-wrap gap-1">
-          <button class="rounded border px-2 py-0.5 text-[11px] font-medium bg-blue-50 text-blue-700 border-blue-300" data-filter-reason="all">All</button>
-          <button class="rounded border px-2 py-0.5 text-[11px] font-medium text-slate-600 border-slate-200 hover:bg-slate-50" data-filter-reason="discrepancies">Discrepancies</button>
-          <button class="rounded border px-2 py-0.5 text-[11px] font-medium text-slate-600 border-slate-200 hover:bg-slate-50" data-filter-reason="critical">Critical</button>
-          <button class="rounded border px-2 py-0.5 text-[11px] font-medium text-slate-600 border-slate-200 hover:bg-slate-50" data-filter-reason="low_confidence">Low Conf</button>
-        </div>
-      </div>
-
-      <!-- Backlog File Tree -->
-      <div class="flex-1 overflow-y-auto p-3" id="parentFileList">
-        <!-- Populated by app.js -->
-      </div>
-
-      <!-- Sidebar Footer -->
-      <footer class="p-3 border-t border-slate-200 bg-slate-50 text-[11px] text-slate-500">
-        <div class="flex items-center justify-between">
-          <span>Active Pipeline:</span>
-          <span class="font-mono font-semibold text-slate-700">Split ➔ Raw ➔ Schema</span>
-        </div>
-        <div class="flex items-center justify-between mt-1">
-          <span>Models:</span>
-          <span class="font-semibold text-slate-700">Claude Sonnet + GPT-4o</span>
-        </div>
-      </footer>
-    </aside>
-
-    <!-- Center Pane: Document Viewer Canvas (Left of Split) -->
-    <section class="flex-1 min-w-[360px] flex flex-col border-r border-slate-200 overflow-hidden bg-slate-100 relative" id="documentViewerPane">
-      <!-- Populated by viewer.js -->
-    </section>
-
-    <!-- Right Pane: Consensus Review Grid & Warehouse Preview -->
-    <section class="w-[480px] xl:w-[540px] 2xl:w-[600px] flex-shrink-0 flex flex-col overflow-y-auto bg-slate-50/50 p-4 relative" id="reviewGridPane">
-      <!-- Populated by app.js -->
-    </section>
-
-    <!-- Warehouse Table Preview (Hidden by default, toggled via tab) -->
-    <section class="hidden flex-1 overflow-auto bg-white" id="warehouseViewPane">
-      <!-- Populated by app.js renderWarehouseView() -->
-    </section>
-
-  </main>
-
-  <!-- Lineage & Audit Provenance Modal -->
-  <div id="lineageModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-    <div id="btnModalCloseOverlay" class="absolute inset-0"></div>
-    <div class="relative bg-white rounded-xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden z-10 animate-pulse-subtle">
-      <div class="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-50">
-        <div class="flex items-center gap-2">
-          <div class="w-2.5 h-2.5 rounded-full bg-blue-600"></div>
-          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Field Lineage &amp; Audit Traceability</h3>
-        </div>
-        <button id="btnCloseLineageModal" class="text-slate-400 hover:text-slate-600 p-1">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-        </button>
-      </div>
-      <div class="p-5 max-h-[80vh] overflow-y-auto" id="lineageModalBody">
-        <!-- Populated by consensus.js openLineageModal() -->
-      </div>
-    </div>
+  <!-- Disclaimer Banner -->
+  <div id="disclaimer-banner" class="bg-amber-50 border-b border-amber-200 px-4 py-1.5 text-center text-xs text-amber-800 flex items-center justify-center gap-2 flex-shrink-0">
+    <svg class="w-3.5 h-3.5 text-amber-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+      <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+    </svg>
+    <span><strong>Portfolio Demo.</strong> Preloaded recorded model outputs from Claude Sonnet 4.5 &amp; GPT-4o. Zero live inference. Zero private infrastructure. Clean-room implementation for Senior PM evaluation.</span>
   </div>
 
-  <!-- Scripts -->
+  <!-- App Header -->
+  <header class="bg-white border-b border-slate-200 flex-shrink-0 z-30">
+    <!-- Brand row -->
+    <div class="px-6 pt-3.5 pb-0 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+        </div>
+        <div>
+          <div class="text-sm font-bold text-slate-900 leading-none">ConsensusIDP</div>
+          <div class="text-[10px] text-slate-400 font-medium mt-0.5 tracking-wide uppercase">Enterprise Document Intelligence</div>
+        </div>
+      </div>
+
+      <!-- Reset -->
+      <button id="btn-reset" class="hidden items-center gap-1.5 text-xs text-slate-400 hover:text-slate-700 transition-colors px-2 py-1 rounded hover:bg-slate-100" onclick="window.app.reset()">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        Reset demo
+      </button>
+    </div>
+
+    <!-- Progress Nav -->
+    <nav id="progress-nav" class="px-6 pb-0 overflow-x-auto">
+      <!-- Rendered by router.js -->
+    </nav>
+  </header>
+
+  <!-- Screen Container -->
+  <main id="screen-container" class="flex-1 overflow-auto">
+    <!-- Each screen renders here -->
+    <div class="flex items-center justify-center h-full text-slate-400 text-sm">Loading…</div>
+  </main>
+
+  <!-- Scripts — order matters -->
   <script src="js/mockData.js"></script>
   <script src="js/state.js"></script>
-  <script src="js/consensus.js"></script>
-  <script src="js/viewer.js"></script>
+  <script src="js/router.js"></script>
+  <script src="js/screens/s1-workspace.js"></script>
+  <script src="js/screens/s2-schema.js"></script>
+  <script src="js/screens/s3-workflow.js"></script>
+  <script src="js/screens/s4-upload.js"></script>
+  <script src="js/screens/s5-run.js"></script>
+  <script src="js/screens/s6-hitl.js"></script>
+  <script src="js/screens/s7-dataset.js"></script>
   <script src="js/app.js"></script>
+
 </body>
 </html>

@@ -1,476 +1,500 @@
 /**
- * ConsensusIDP Demo State Store
- * Manages reactive in-memory state with graceful localStorage fallback and strict business validation rules.
+ * ConsensusIDP — Global Application State
+ * Manages all screen and workflow state across the multi-page demo.
+ * Stored in localStorage for persistence across page refreshes.
  */
 
-class DemoStateStore {
-  constructor() {
-    this.listeners = [];
-    this.storageKey = "consensus_idp_demo_state_v2";
-    this.data = null;
-    this.currentScenarioId = "lakeside-inn";
-    this.currentFileId = null;
-    this.currentChildId = null;
-    this.activeCellId = null;
-    this.currentViewMode = "review"; // "review" | "warehouse"
-    this.currentTab = "needs_review"; // "needs_review" | "all"
-    this.currentPageNum = 1;
+(function () {
+  const STORAGE_KEY = 'cidp_demo_v3';
 
-    this.init();
-  }
+  const DEFAULT_STATE = {
+    // Navigation
+    currentScreen: 1,
+    unlockedScreens: [1],
 
-  init() {
-    const rawInitial = window.DEMO_DATA || { scenarios: [] };
-    // Try restoring from localStorage if available and valid
+    // Screen 1 — Workspace
+    workspace: null,
+    // { name: string, createdAt: string }
+
+    // Screen 2 — Schema (pre-filled, user just reviews)
+    schema: {
+      name: 'Hotel Folio Schema',
+      fields: [
+        { id: 'f1', name: 'guest_name',      label: 'Guest Name',          type: 'VARCHAR',   required: true,  description: 'Full name of the primary guest' },
+        { id: 'f2', name: 'folio_number',    label: 'Folio Number',        type: 'VARCHAR',   required: true,  description: 'Unique folio reference identifier' },
+        { id: 'f3', name: 'hotel_name',      label: 'Hotel Name',          type: 'VARCHAR',   required: true,  description: 'Name of the property' },
+        { id: 'f4', name: 'check_in_date',   label: 'Check-in Date',       type: 'DATE',      required: true,  description: 'Guest check-in date (ISO 8601)' },
+        { id: 'f5', name: 'check_out_date',  label: 'Check-out Date',      type: 'DATE',      required: true,  description: 'Guest check-out date (ISO 8601)' },
+        { id: 'f6', name: 'room_number',     label: 'Room Number',         type: 'VARCHAR',   required: true,  description: 'Assigned room number at time of stay' },
+        { id: 'f7', name: 'room_type',       label: 'Room Type',           type: 'VARCHAR',   required: false, description: 'Room category (e.g. Deluxe King)' },
+        { id: 'f8', name: 'total_amount',    label: 'Total Amount (USD)',  type: 'DECIMAL',   required: true,  description: 'Total folio balance due' },
+        { id: 'f9', name: 'currency',        label: 'Currency',            type: 'VARCHAR',   required: false, description: 'Billing currency code' },
+        { id: 'f10', name: 'tax_id',         label: 'Tax ID',              type: 'VARCHAR',   required: false, description: 'Hotel tax registration number' },
+      ]
+    },
+
+    // Screen 3 — Workflow
+    workflow: {
+      name: 'Folio Extraction Pipeline',
+      splitRules: [
+        { id: 'sr1', childName: 'Guest Folio A', startPage: 1, endPage: 2 },
+        { id: 'sr2', childName: 'Guest Folio B', startPage: 3, endPage: 3 },
+      ],
+      modelA: 'claude-sonnet-4-5',
+      modelB: 'gpt-4o',
+      consensusThreshold: 0.85,
+      autoApprove: true,
+    },
+
+    // Screen 4 — Upload
+    uploadedFile: null,
+    // Will be set to the lakeside inn sample file info on screen 4
+
+    // Screen 5 — Run
+    runComplete: false,
+
+    // Screen 6 — HITL
+    // Uses mockData.js for field data; tracks review state separately
+    activeChildId: null,
+    activeCellId: null,
+    currentPageNum: 1,
+    showAllBoxes: false,
+    reviewTab: 'needs_review', // 'needs_review' | 'all'
+    // Field review state is managed in reviewState (derived from mockData)
+    reviewState: null, // initialized on first visit to screen 6
+
+    // Screen 7 — Dataset
+    // Derived from reviewState
+  };
+
+  function loadState() {
     try {
-      const saved = localStorage.getItem(this.storageKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && Array.isArray(parsed.scenarios) && parsed.scenarios.length > 0) {
-          this.data = parsed;
-        } else {
-          this.data = JSON.parse(JSON.stringify(rawInitial));
-        }
-      } else {
-        this.data = JSON.parse(JSON.stringify(rawInitial));
-      }
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return JSON.parse(JSON.stringify(DEFAULT_STATE));
+      const parsed = JSON.parse(saved);
+      // Validate minimal shape
+      if (typeof parsed.currentScreen !== 'number') throw new Error('invalid');
+      return parsed;
     } catch (e) {
-      // In private browsing or restricted environments, use in-memory clone
-      this.data = JSON.parse(JSON.stringify(rawInitial));
-    }
-
-    // Set default scenario and file selection
-    const sc = this.getCurrentScenario();
-    if (sc && sc.files && sc.files.length) {
-      this.currentFileId = sc.files[0].fileId;
-      if (sc.files[0].children && sc.files[0].children.length) {
-        this.currentChildId = sc.files[0].children[0].childId;
-        this.currentPageNum = sc.files[0].children[0].pages[0] || 1;
-      }
-    }
-
-    // Default active cell to first review item if present
-    this.selectFirstActionableCell();
-  }
-
-  selectFirstActionableCell() {
-    const child = this.getCurrentChild();
-    if (!child) return;
-
-    for (const comp of child.components) {
-      for (const cell of comp.cells) {
-        if (cell.reviewStatus === "needs_review") {
-          this.activeCellId = cell.cellId;
-          if (cell.boundingBox && cell.boundingBox.page) {
-            this.currentPageNum = cell.boundingBox.page;
-          }
-          return;
-        }
-      }
-    }
-
-    // Fallback to first cell if none need review
-    if (child.components[0] && child.components[0].cells[0]) {
-      this.activeCellId = child.components[0].cells[0].cellId;
+      return JSON.parse(JSON.stringify(DEFAULT_STATE));
     }
   }
 
-  save() {
+  function saveState(s) {
     try {
-      localStorage.setItem(this.storageKey, JSON.stringify(this.data));
-    } catch (e) {
-      // Ignore localStorage write failure in restricted browsing contexts
-    }
-    this.notify();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    } catch (e) { /* private browsing */ }
   }
 
-  reset() {
-    try {
-      localStorage.removeItem(this.storageKey);
-    } catch (e) {}
-    const rawInitial = window.DEMO_DATA || { scenarios: [] };
-    this.data = JSON.parse(JSON.stringify(rawInitial));
-    this.activeCellId = null;
-    this.currentViewMode = "review";
-    this.currentTab = "needs_review";
+  // ── State Store ──────────────────────────────────────────────
 
-    const sc = this.getCurrentScenario();
-    if (sc && sc.files && sc.files.length) {
-      this.currentFileId = sc.files[0].fileId;
-      if (sc.files[0].children && sc.files[0].children.length) {
-        this.currentChildId = sc.files[0].children[0].childId;
-        this.currentPageNum = sc.files[0].children[0].pages[0] || 1;
+  const store = {
+    _state: loadState(),
+    _listeners: [],
+
+    get() { return this._state; },
+
+    set(updates) {
+      Object.assign(this._state, updates);
+      saveState(this._state);
+      this._notify();
+    },
+
+    // Convenience getter
+    s() { return this._state; },
+
+    subscribe(fn) {
+      this._listeners.push(fn);
+      return () => { this._listeners = this._listeners.filter(l => l !== fn); };
+    },
+
+    _notify() {
+      this._listeners.forEach(fn => { try { fn(this._state); } catch(e) { console.error(e); } });
+    },
+
+    // ── Navigation ──────────────────────────────────────────────
+
+    navigateTo(screen) {
+      const s = this._state;
+      if (!s.unlockedScreens.includes(screen)) return;
+      s.currentScreen = screen;
+      saveState(s);
+      this._notify();
+    },
+
+    unlock(screen) {
+      const s = this._state;
+      if (!s.unlockedScreens.includes(screen)) {
+        s.unlockedScreens.push(screen);
+        saveState(s);
       }
-    }
+    },
 
-    this.selectFirstActionableCell();
-    this.notify();
-  }
+    // ── Workspace ───────────────────────────────────────────────
 
-  subscribe(fn) {
-    this.listeners.push(fn);
-    return () => {
-      this.listeners = this.listeners.filter((l) => l !== fn);
-    };
-  }
+    createWorkspace(name) {
+      const trimmed = (name || '').trim();
+      if (!trimmed) return false;
+      this._state.workspace = { name: trimmed, createdAt: new Date().toISOString() };
+      this.unlock(2);
+      saveState(this._state);
+      this._notify();
+      return true;
+    },
 
-  notify() {
-    for (const fn of this.listeners) {
-      try {
-        fn(this);
-      } catch (err) {
-        console.error("State listener error:", err);
-      }
-    }
-  }
+    // ── Schema ──────────────────────────────────────────────────
 
-  // --- Scenario & Navigation Getters / Setters ---
+    updateSchemaField(id, updates) {
+      const s = this._state;
+      const field = s.schema.fields.find(f => f.id === id);
+      if (!field) return;
+      Object.assign(field, updates);
+      saveState(s);
+      this._notify();
+    },
 
-  getScenarios() {
-    return this.data.scenarios || [];
-  }
+    addSchemaField() {
+      const s = this._state;
+      const newId = 'f' + Date.now();
+      s.schema.fields.push({ id: newId, name: '', label: 'New Field', type: 'VARCHAR', required: false, description: '' });
+      saveState(s);
+      this._notify();
+      return newId;
+    },
 
-  getCurrentScenario() {
-    return this.getScenarios().find((s) => s.id === this.currentScenarioId) || this.getScenarios()[0];
-  }
+    removeSchemaField(id) {
+      const s = this._state;
+      s.schema.fields = s.schema.fields.filter(f => f.id !== id);
+      saveState(s);
+      this._notify();
+    },
 
-  setScenario(scenarioId) {
-    if (this.currentScenarioId === scenarioId) return;
-    this.currentScenarioId = scenarioId;
-    const sc = this.getCurrentScenario();
-    if (sc && sc.files && sc.files.length) {
-      this.currentFileId = sc.files[0].fileId;
-      if (sc.files[0].children && sc.files[0].children.length) {
-        this.currentChildId = sc.files[0].children[0].childId;
-        this.currentPageNum = sc.files[0].children[0].pages[0] || 1;
-      } else {
-        this.currentChildId = null;
-        this.currentPageNum = 1;
-      }
-    }
-    this.selectFirstActionableCell();
-    this.notify();
-  }
+    confirmSchema() {
+      this.unlock(3);
+      this._notify();
+    },
 
-  getCurrentFile() {
-    const sc = this.getCurrentScenario();
-    return (sc && sc.files.find((f) => f.fileId === this.currentFileId)) || (sc && sc.files[0]) || null;
-  }
+    // ── Workflow ────────────────────────────────────────────────
 
-  selectFile(fileId) {
-    this.currentFileId = fileId;
-    const f = this.getCurrentFile();
-    if (f && f.children && f.children.length) {
-      this.currentChildId = f.children[0].childId;
-      this.currentPageNum = f.children[0].pages[0] || 1;
-    }
-    this.selectFirstActionableCell();
-    this.notify();
-  }
+    updateWorkflow(updates) {
+      Object.assign(this._state.workflow, updates);
+      saveState(this._state);
+      this._notify();
+    },
 
-  getCurrentChild() {
-    const f = this.getCurrentFile();
-    if (!f || !f.children) return null;
-    return f.children.find((c) => c.childId === this.currentChildId) || f.children[0] || null;
-  }
+    confirmWorkflow() {
+      this.unlock(4);
+      this._notify();
+    },
 
-  selectChild(childId) {
-    this.currentChildId = childId;
-    const c = this.getCurrentChild();
-    if (c && c.pages && c.pages.length) {
-      this.currentPageNum = c.pages[0];
-    }
-    this.selectFirstActionableCell();
-    this.notify();
-  }
+    // ── Upload ──────────────────────────────────────────────────
 
-  // Restrict page navigation to pages belonging to this child document!
-  getChildPages() {
-    const child = this.getCurrentChild();
-    return (child && child.pages && child.pages.length) ? child.pages : [1];
-  }
+    setUploadedFile(fileInfo) {
+      this._state.uploadedFile = fileInfo;
+      this.unlock(5);
+      saveState(this._state);
+      this._notify();
+    },
 
-  getChildPageIndex() {
-    const pages = this.getChildPages();
-    const idx = pages.indexOf(this.currentPageNum);
-    return idx >= 0 ? idx : 0;
-  }
+    // ── Run ─────────────────────────────────────────────────────
 
-  setChildPageIndex(index) {
-    const pages = this.getChildPages();
-    const clamped = Math.max(0, Math.min(pages.length - 1, index));
-    this.currentPageNum = pages[clamped];
-    this.notify();
-  }
+    completeRun() {
+      this._state.runComplete = true;
+      this.unlock(6);
+      this.unlock(7);
+      saveState(this._state);
+      this._notify();
+    },
 
-  prevChildPage() {
-    const idx = this.getChildPageIndex();
-    if (idx > 0) {
-      this.setChildPageIndex(idx - 1);
-    }
-  }
+    // ── Review State (HITL) ─────────────────────────────────────
 
-  nextChildPage() {
-    const idx = this.getChildPageIndex();
-    const pages = this.getChildPages();
-    if (idx < pages.length - 1) {
-      this.setChildPageIndex(idx + 1);
-    }
-  }
+    initReviewState() {
+      if (this._state.reviewState) return; // already initialized
+      // Deep-clone from DEMO_DATA (mockData.js)
+      if (!window.DEMO_DATA) { console.error('DEMO_DATA not loaded'); return; }
+      const scenario = window.DEMO_DATA.scenarios.find(s => s.id === 'lakeside-inn');
+      if (!scenario) return;
 
-  setActiveCell(cellId) {
-    this.activeCellId = cellId;
-    // Auto-switch document page if cell belongs to a different page within the child
-    const cell = this.getCellById(cellId);
-    if (cell && cell.boundingBox && cell.boundingBox.page) {
-      const childPages = this.getChildPages();
-      if (childPages.includes(cell.boundingBox.page)) {
-        this.currentPageNum = cell.boundingBox.page;
-      }
-    }
-    this.notify();
-  }
-
-  setTab(tabName) {
-    if (this.currentTab === tabName) return;
-    this.currentTab = tabName;
-    this.notify();
-  }
-
-  setViewMode(mode) {
-    this.currentViewMode = mode;
-    this.notify();
-  }
-
-  // --- Cell & Approval Operations ---
-
-  getCellById(cellId) {
-    const sc = this.getCurrentScenario();
-    if (!sc) return null;
-    for (const f of sc.files) {
-      for (const child of f.children) {
-        for (const comp of child.components) {
-          for (const cell of comp.cells) {
-            if (cell.cellId === cellId) return cell;
-          }
-        }
-      }
-    }
-    return null;
-  }
-
-  updateCellValue(cellId, newValue, actionSource = "HUMAN_REVIEWER") {
-    const cell = this.getCellById(cellId);
-    if (!cell) return;
-
-    cell.selectedValue = newValue;
-    cell.reviewStatus = "approved";
-    if (!cell.lineage) {
-      cell.lineage = {};
-    }
-    cell.lineage.reviewerId = actionSource;
-    cell.lineage.reviewedAt = new Date().toISOString();
-    cell.lineage.humanOverride = true;
-
-    this.recalculateStatuses();
-    this.save();
-  }
-
-  approveCell(cellId) {
-    const cell = this.getCellById(cellId);
-    if (!cell) return;
-
-    cell.reviewStatus = "approved";
-    if (!cell.lineage) {
-      cell.lineage = {};
-    }
-    cell.lineage.reviewerId = "HUMAN_REVIEWER";
-    cell.lineage.reviewedAt = new Date().toISOString();
-
-    this.recalculateStatuses();
-    this.save();
-  }
-
-  flagCell(cellId) {
-    const cell = this.getCellById(cellId);
-    if (!cell) return;
-
-    cell.reviewStatus = "needs_review";
-    if (!cell.reviewReason) cell.reviewReason = "mismatch";
-    this.recalculateStatuses();
-    this.save();
-  }
-
-  // Critical fields MUST NEVER be automatically approved through bulk approval!
-  approveAllInChild(childId) {
-    const child = this.getCurrentChild();
-    if (!child || child.childId !== childId) {
-      return { approvedCount: 0, skippedCriticalCount: 0 };
-    }
-
-    let approvedCount = 0;
-    let skippedCriticalCount = 0;
-
-    for (const comp of child.components) {
-      for (const cell of comp.cells) {
-        if (cell.reviewStatus === "needs_review") {
-          if (cell.critical) {
-            // CRITICAL FIELDS REQUIRE EXPLICIT INDIVIDUAL HUMAN REVIEW
-            skippedCriticalCount++;
-            continue;
-          }
-          cell.reviewStatus = "approved";
-          if (!cell.lineage) cell.lineage = {};
-          cell.lineage.reviewerId = "HUMAN_BULK_APPROVE_ELIGIBLE";
-          cell.lineage.reviewedAt = new Date().toISOString();
-          approvedCount++;
-        }
-      }
-    }
-
-    this.recalculateStatuses();
-    this.save();
-
-    return { approvedCount, skippedCriticalCount };
-  }
-
-  // Publishing must NOT mark a document as published while mandatory review items remain!
-  publishChild(childId) {
-    const child = this.getCurrentChild();
-    if (!child || child.childId !== childId) {
-      return { success: false, reason: "Document not found." };
-    }
-
-    const unresolvedCells = [];
-    for (const comp of child.components) {
-      for (const cell of comp.cells) {
-        if (cell.reviewStatus === "needs_review") {
-          unresolvedCells.push(cell);
-        }
-      }
-    }
-
-    if (unresolvedCells.length > 0) {
-      const criticalCount = unresolvedCells.filter((c) => c.critical).length;
-      return {
-        success: false,
-        reason: `Cannot publish: ${unresolvedCells.length} field(s) require review (${criticalCount} critical).`,
-        unresolvedCount: unresolvedCells.length,
-        criticalCount,
+      const reviewState = {
+        scenarioId: 'lakeside-inn',
+        files: JSON.parse(JSON.stringify(scenario.files)),
       };
-    }
 
-    child.publishStatus = "published";
-    const f = this.getCurrentFile();
-    if (f) {
-      f.lastPublishedOn = new Date().toISOString();
-    }
+      this._state.reviewState = reviewState;
 
-    this.recalculateStatuses();
-    this.save();
-
-    return { success: true };
-  }
-
-  recalculateStatuses() {
-    const sc = this.getCurrentScenario();
-    if (!sc) return;
-
-    for (const f of sc.files) {
-      let allChildrenPublished = true;
-      let anyChildNeedsReview = false;
-
-      for (const c of f.children) {
-        let childNeedsReview = false;
-        for (const comp of c.components) {
-          for (const cell of comp.cells) {
-            if (cell.reviewStatus === "needs_review") {
-              childNeedsReview = true;
-              anyChildNeedsReview = true;
-            }
-          }
-        }
-        c.status = childNeedsReview ? "needs_review" : "approved";
-        if (c.publishStatus !== "published") {
-          allChildrenPublished = false;
-        }
+      // Set defaults
+      const firstFile = reviewState.files[0];
+      if (firstFile && firstFile.children && firstFile.children.length) {
+        this._state.activeChildId = firstFile.children[0].childId;
+        this._state.currentPageNum = firstFile.children[0].pages[0] || 1;
+        // Auto-select first needs_review cell
+        this._setFirstActiveCell(firstFile.children[0]);
       }
 
-      f.status = anyChildNeedsReview ? "needs_review" : "approved";
-      f.publishStatus = allChildrenPublished ? "published" : "partially_published";
-    }
-  }
+      saveState(this._state);
+    },
 
-  getMetrics() {
-    const sc = this.getCurrentScenario();
-    let totalCells = 0;
-    let needsReviewCount = 0;
-    let approvedCount = 0;
-    let publishedCount = 0;
-    let discrepanciesCount = 0;
-    let lowConfidenceCount = 0;
-    let criticalCount = 0;
+    _setFirstActiveCell(child) {
+      for (const comp of (child.components || [])) {
+        for (const cell of (comp.cells || [])) {
+          if (cell.reviewStatus === 'needs_review') {
+            this._state.activeCellId = cell.cellId;
+            if (cell.boundingBox && cell.boundingBox.page) {
+              this._state.currentPageNum = cell.boundingBox.page;
+            }
+            return;
+          }
+        }
+      }
+      // fallback: first cell
+      if (child.components[0] && child.components[0].cells[0]) {
+        this._state.activeCellId = child.components[0].cells[0].cellId;
+      }
+    },
 
-    if (sc) {
-      for (const f of sc.files) {
-        for (const c of f.children) {
-          if (c.publishStatus === "published") publishedCount++;
-          for (const comp of c.components) {
+    getCurrentReviewFile() {
+      const s = this._state;
+      if (!s.reviewState) return null;
+      return s.reviewState.files[0] || null;
+    },
+
+    getCurrentChild() {
+      const s = this._state;
+      const file = this.getCurrentReviewFile();
+      if (!file) return null;
+      return file.children.find(c => c.childId === s.activeChildId) || file.children[0] || null;
+    },
+
+    selectChild(childId) {
+      const s = this._state;
+      s.activeChildId = childId;
+      const child = this.getCurrentChild();
+      if (child && child.pages && child.pages.length) {
+        s.currentPageNum = child.pages[0];
+      }
+      s.activeCellId = null;
+      this._setFirstActiveCell(child);
+      saveState(s);
+      this._notify();
+    },
+
+    getChildPages() {
+      const child = this.getCurrentChild();
+      return (child && child.pages && child.pages.length) ? child.pages : [1];
+    },
+
+    prevPage() {
+      const pages = this.getChildPages();
+      const idx = pages.indexOf(this._state.currentPageNum);
+      if (idx > 0) { this._state.currentPageNum = pages[idx - 1]; saveState(this._state); this._notify(); }
+    },
+
+    nextPage() {
+      const pages = this.getChildPages();
+      const idx = pages.indexOf(this._state.currentPageNum);
+      if (idx < pages.length - 1) { this._state.currentPageNum = pages[idx + 1]; saveState(this._state); this._notify(); }
+    },
+
+    setActiveCell(cellId) {
+      const s = this._state;
+      s.activeCellId = cellId;
+      const cell = this.getCellById(cellId);
+      if (cell && cell.boundingBox && cell.boundingBox.page) {
+        const pages = this.getChildPages();
+        if (pages.includes(cell.boundingBox.page)) s.currentPageNum = cell.boundingBox.page;
+      }
+      saveState(s);
+      this._notify();
+    },
+
+    getCellById(cellId) {
+      const s = this._state;
+      if (!s.reviewState) return null;
+      for (const f of s.reviewState.files) {
+        for (const child of f.children) {
+          for (const comp of child.components) {
             for (const cell of comp.cells) {
-              totalCells++;
-              if (cell.reviewStatus === "needs_review") needsReviewCount++;
-              if (cell.reviewStatus === "approved") approvedCount++;
-              if (cell.reviewReason === "mismatch") discrepanciesCount++;
-              if (cell.reviewReason === "low_confidence") lowConfidenceCount++;
-              if (cell.critical) criticalCount++;
+              if (cell.cellId === cellId) return cell;
             }
           }
         }
       }
-    }
+      return null;
+    },
 
-    return {
-      totalCells,
-      needsReviewCount,
-      approvedCount,
-      publishedCount,
-      discrepanciesCount,
-      lowConfidenceCount,
-      criticalCount,
-    };
-  }
+    approveCell(cellId) {
+      const cell = this.getCellById(cellId);
+      if (!cell) return;
+      cell.reviewStatus = 'approved';
+      if (!cell.lineage) cell.lineage = {};
+      cell.lineage.reviewerId = 'HUMAN_REVIEWER';
+      cell.lineage.reviewedAt = new Date().toISOString();
+      this._recalc();
+      saveState(this._state);
+      // Auto-advance active cell to next needs_review
+      this._advanceActiveCell();
+      this._notify();
+    },
 
-  // Helpers for current child document status
-  getCurrentChildSummary() {
-    const child = this.getCurrentChild();
-    if (!child) return { total: 0, needsReview: 0, criticalNeedsReview: 0, approved: 0, isReadyToPublish: false };
+    acceptModel(cellId, modelIndex) {
+      const cell = this.getCellById(cellId);
+      if (!cell || !cell.extractions || !cell.extractions[modelIndex]) return;
+      cell.selectedValue = cell.extractions[modelIndex].value;
+      cell.lineage = cell.lineage || {};
+      cell.lineage.reviewerId = cell.extractions[modelIndex].modelId;
+      cell.lineage.reviewedAt = new Date().toISOString();
+      cell.lineage.humanOverride = false;
+      cell.reviewStatus = 'approved';
+      this._recalc();
+      saveState(this._state);
+      this._advanceActiveCell();
+      this._notify();
+    },
 
-    let total = 0;
-    let needsReview = 0;
-    let criticalNeedsReview = 0;
-    let approved = 0;
+    editCellValue(cellId, newValue) {
+      const cell = this.getCellById(cellId);
+      if (!cell) return;
+      cell.selectedValue = newValue;
+      cell.reviewStatus = 'approved';
+      cell.lineage = cell.lineage || {};
+      cell.lineage.reviewerId = 'HUMAN_MANUAL_EDIT';
+      cell.lineage.reviewedAt = new Date().toISOString();
+      cell.lineage.humanOverride = true;
+      this._recalc();
+      saveState(this._state);
+      this._advanceActiveCell();
+      this._notify();
+    },
 
-    for (const comp of child.components) {
-      for (const cell of comp.cells) {
-        total++;
-        if (cell.reviewStatus === "needs_review") {
-          needsReview++;
-          if (cell.critical) criticalNeedsReview++;
-        } else {
-          approved++;
+    flagCell(cellId) {
+      const cell = this.getCellById(cellId);
+      if (!cell) return;
+      cell.reviewStatus = 'needs_review';
+      this._recalc();
+      saveState(this._state);
+      this._notify();
+    },
+
+    // Approve all non-critical needs_review cells in the current child
+    approveAllEligible() {
+      const child = this.getCurrentChild();
+      if (!child) return { approved: 0, skipped: 0 };
+      let approved = 0, skipped = 0;
+      for (const comp of child.components) {
+        for (const cell of comp.cells) {
+          if (cell.reviewStatus === 'needs_review') {
+            if (cell.critical) { skipped++; continue; }
+            cell.reviewStatus = 'approved';
+            cell.lineage = cell.lineage || {};
+            cell.lineage.reviewerId = 'HUMAN_BULK_APPROVE';
+            cell.lineage.reviewedAt = new Date().toISOString();
+            approved++;
+          }
         }
       }
-    }
+      this._recalc();
+      saveState(this._state);
+      this._notify();
+      return { approved, skipped };
+    },
 
-    return {
-      total,
-      needsReview,
-      criticalNeedsReview,
-      approved,
-      isReadyToPublish: needsReview === 0,
-      isPublished: child.publishStatus === "published",
-    };
-  }
-}
+    getChildSummary() {
+      const child = this.getCurrentChild();
+      if (!child) return { total: 0, needsReview: 0, criticalPending: 0, approved: 0, canPublish: false, isPublished: false };
+      let total = 0, needsReview = 0, criticalPending = 0, approved = 0;
+      for (const comp of child.components) {
+        for (const cell of comp.cells) {
+          total++;
+          if (cell.reviewStatus === 'needs_review') { needsReview++; if (cell.critical) criticalPending++; }
+          else approved++;
+        }
+      }
+      return {
+        total, needsReview, criticalPending, approved,
+        canPublish: needsReview === 0,
+        isPublished: child.publishStatus === 'published',
+      };
+    },
 
-window.demoState = new DemoStateStore();
+    publishCurrentChild() {
+      const child = this.getCurrentChild();
+      if (!child) return { success: false, reason: 'No document selected.' };
+      const summary = this.getChildSummary();
+      if (!summary.canPublish) {
+        return { success: false, reason: `${summary.needsReview} field(s) still need review (${summary.criticalPending} critical).` };
+      }
+      child.publishStatus = 'published';
+      const file = this.getCurrentReviewFile();
+      if (file) file.lastPublishedOn = new Date().toISOString();
+      this._recalc();
+      saveState(this._state);
+      this._notify();
+      return { success: true };
+    },
+
+    getScenarioMetrics() {
+      const s = this._state;
+      if (!s.reviewState) return { total: 0, needsReview: 0, autoApproved: 0, humanApproved: 0, published: 0 };
+      let total = 0, needsReview = 0, autoApproved = 0, humanApproved = 0, published = 0;
+      for (const f of s.reviewState.files) {
+        for (const child of f.children) {
+          if (child.publishStatus === 'published') published++;
+          for (const comp of child.components) {
+            for (const cell of comp.cells) {
+              total++;
+              if (cell.reviewStatus === 'needs_review') needsReview++;
+              else if (cell.reviewStatus === 'approved') {
+                if (cell.lineage && cell.lineage.reviewerId && cell.lineage.reviewerId !== 'AUTO_CONSENSUS') humanApproved++;
+                else autoApproved++;
+              }
+            }
+          }
+        }
+      }
+      return { total, needsReview, autoApproved, humanApproved, published };
+    },
+
+    _advanceActiveCell() {
+      const child = this.getCurrentChild();
+      if (!child) return;
+      const s = this._state;
+      // Find next needs_review cell
+      let found = false;
+      for (const comp of child.components) {
+        for (const cell of comp.cells) {
+          if (cell.reviewStatus === 'needs_review') {
+            s.activeCellId = cell.cellId;
+            if (cell.boundingBox && cell.boundingBox.page) {
+              const pages = this.getChildPages();
+              if (pages.includes(cell.boundingBox.page)) s.currentPageNum = cell.boundingBox.page;
+            }
+            found = true;
+            return;
+          }
+        }
+      }
+      if (!found) s.activeCellId = null;
+    },
+
+    _recalc() {
+      const s = this._state;
+      if (!s.reviewState) return;
+      for (const f of s.reviewState.files) {
+        for (const child of f.children) {
+          const hasNeedsReview = child.components.some(c => c.cells.some(cell => cell.reviewStatus === 'needs_review'));
+          child.status = hasNeedsReview ? 'needs_review' : 'approved';
+        }
+      }
+    },
+
+    // ── Full Reset ───────────────────────────────────────────────
+
+    fullReset() {
+      try { localStorage.removeItem(STORAGE_KEY); } catch(e) {}
+      this._state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+      this._notify();
+    },
+  };
+
+  window.appState = store;
+})();
