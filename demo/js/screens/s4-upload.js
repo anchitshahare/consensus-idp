@@ -6,7 +6,10 @@
 (function () {
 
   function render(container) {
-    const s = appState.s();
+    const appState = window.appState;
+    const router = window.router;
+    const esc = window.esc || (x => x);
+    const s = appState ? appState.s() : { workflow: { name: 'Workflow' } };
 
     const sampleFile = {
       name: 'Lakeside_Inn_Guest_Folios.pdf',
@@ -32,7 +35,7 @@
             <div class="flex items-center gap-2 text-xs font-medium text-slate-400 mb-1">
               <span>${esc(s.workspace ? s.workspace.name : 'Workspace')}</span>
               <span>/</span>
-              <span>Pipeline: ${esc(s.workflow.name)}</span>
+              <span>Pipeline: ${esc(s.workflow ? s.workflow.name : 'Pipeline')}</span>
               <span>/</span>
               <span class="text-slate-600">Document Input</span>
             </div>
@@ -94,7 +97,7 @@
             <!-- Run Button -->
             <button
               id="btn-run-workflow"
-              class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-6 py-2.5 rounded-lg shadow-sm transition-all transform active:scale-95"
+              class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-6 py-2.5 rounded-lg shadow-sm transition-all transform active:scale-95 cursor-pointer"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
@@ -116,12 +119,14 @@
     const btnRun = container.querySelector('#btn-run-workflow');
     if (btnRun) {
       btnRun.onclick = () => {
-        appState.setUploadedFile(sampleFile);
-        router.go(5);
+        if (appState) appState.setUploadedFile(sampleFile);
+        if (router) router.go(5);
       };
     }
   }
 
-  router.register(4, render);
+  if (window.router) {
+    window.router.register(4, render);
+  }
 
 })();

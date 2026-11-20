@@ -603,7 +603,7 @@
         const res = appState.publishCurrentChild();
         if (res.success) {
           showToast('Document published to simulated Redshift warehouse.', 'success');
-          setTimeout(() => router.go(7), 400);
+          setTimeout(() => { if (window.router) window.router.go(7); }, 400);
         } else {
           showToast(res.reason, 'error');
         }
@@ -650,6 +650,8 @@
     }
   }
 
-  router.register(6, render);
+  if (window.router) {
+    window.router.register(6, render);
+  }
 
 })();

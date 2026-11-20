@@ -6,7 +6,12 @@
 (function () {
 
   function render(container) {
-    const s = appState.s();
+    const appState = window.appState;
+    const router = window.router;
+    const showToast = window.showToast;
+    const esc = window.esc || (x => x);
+
+    const s = appState ? appState.s() : { schema: { name: 'Hotel Folio Schema', fields: [] } };
     const schema = s.schema;
 
     container.innerHTML = `
@@ -27,7 +32,7 @@
           <div class="flex items-center gap-3">
             <button
               id="btn-add-field"
-              class="inline-flex items-center gap-1.5 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold px-3 py-2 rounded-lg transition-colors shadow-2xs"
+              class="inline-flex items-center gap-1.5 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold px-3 py-2 rounded-lg transition-colors shadow-2xs cursor-pointer"
             >
               <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -36,7 +41,7 @@
             </button>
             <button
               id="btn-continue-schema"
-              class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm"
+              class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm cursor-pointer"
             >
               Continue to Workflow
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -61,7 +66,7 @@
                   title="Click to rename schema"
                 />
               </div>
-              <span class="text-xs font-mono text-slate-400" id="field-count-badge">${schema.fields.length} attributes</span>
+              <span class="text-xs font-mono text-slate-400" id="field-count-badge">${schema.fields ? schema.fields.length : 0} attributes</span>
             </div>
 
             <div class="overflow-x-auto">
@@ -104,6 +109,7 @@
   }
 
   function renderFieldRows(fields) {
+    const esc = window.esc || (x => x);
     if (!fields || fields.length === 0) {
       return `<tr><td colspan="5" class="p-8 text-center text-slate-400">No fields defined yet.</td></tr>`;
     }
@@ -156,7 +162,7 @@
         <td class="py-2.5 px-3 text-center">
           <button
             data-action="delete"
-            class="text-slate-300 hover:text-rose-600 transition-colors p-1"
+            class="text-slate-300 hover:text-rose-600 transition-colors p-1 cursor-pointer"
             title="Delete attribute"
           >
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -169,14 +175,16 @@
   }
 
   function updateJsonPreview() {
+    const appState = window.appState;
+    if (!appState) return;
     const s = appState.s();
     const previewEl = document.getElementById('json-preview');
-    if (!previewEl) return;
+    if (!previewEl || !s.schema) return;
 
     const payload = {
       schema_name: s.schema.name,
       target_entity: "hospitality_guest_folio",
-      fields: s.schema.fields.map(f => ({
+      fields: (s.schema.fields || []).map(f => ({
         key: f.name,
         display_label: f.label,
         type: f.type,
@@ -188,17 +196,22 @@
   }
 
   function wireEvents(container) {
+    const appState = window.appState;
+    const router = window.router;
+    const showToast = window.showToast;
+
     const schemaNameInput = container.querySelector('#schema-name-input');
     if (schemaNameInput) {
       schemaNameInput.onchange = (e) => {
-        appState.s().schema.name = e.target.value.trim() || 'Untitled Schema';
+        if (appState) {
+          appState.s().schema.name = e.target.value.trim() || 'Untitled Schema';
+        }
         updateJsonPreview();
       };
     }
 
     const tbody = container.querySelector('#schema-fields-tbody');
     if (tbody) {
-      // Delegate input changes
       tbody.addEventListener('change', (e) => {
         const tr = e.target.closest('tr');
         if (!tr) return;
@@ -209,45 +222,54 @@
         let val = e.target.value;
         if (e.target.type === 'checkbox') val = e.target.checked;
 
-        appState.updateSchemaField(fieldId, { [key]: val });
+        if (appState) {
+          appState.updateSchemaField(fieldId, { [key]: val });
+        }
         updateJsonPreview();
       });
 
-      // Delegate delete
       tbody.addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-action="delete"]');
         if (!btn) return;
         const tr = btn.closest('tr');
         if (!tr) return;
         const fieldId = tr.getAttribute('data-field-id');
-        appState.removeSchemaField(fieldId);
+        if (appState) {
+          appState.removeSchemaField(fieldId);
+        }
         tr.remove();
         updateJsonPreview();
         const badge = container.querySelector('#field-count-badge');
-        if (badge) badge.textContent = `${appState.s().schema.fields.length} attributes`;
+        if (badge && appState) badge.textContent = `${appState.s().schema.fields.length} attributes`;
       });
     }
 
-    // Add field
     const btnAdd = container.querySelector('#btn-add-field');
     if (btnAdd) {
       btnAdd.onclick = () => {
-        appState.addSchemaField();
+        if (appState) {
+          appState.addSchemaField();
+        }
         render(container);
-        showToast('New field added to schema.', 'info');
+        if (showToast) showToast('New field added to schema.', 'info');
       };
     }
 
-    // Continue
     const btnContinue = container.querySelector('#btn-continue-schema');
     if (btnContinue) {
       btnContinue.onclick = () => {
-        appState.confirmSchema();
-        router.go(3);
+        if (appState) {
+          appState.confirmSchema();
+        }
+        if (router) {
+          router.go(3);
+        }
       };
     }
   }
 
-  router.register(2, render);
+  if (window.router) {
+    window.router.register(2, render);
+  }
 
 })();

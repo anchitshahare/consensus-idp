@@ -158,6 +158,8 @@
     `;
   }
 
-  router.register(7, render);
+  if (window.router) {
+    window.router.register(7, render);
+  }
 
 })();

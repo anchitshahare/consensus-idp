@@ -25,14 +25,15 @@
     const nav = document.getElementById('progress-nav');
     if (!nav) return;
 
-    const { currentScreen, unlockedScreens } = state;
+    const s = state || (window.appState && window.appState.s()) || { currentScreen: 1, unlockedScreens: [1] };
+    const { currentScreen, unlockedScreens } = s;
 
     let html = '<div class="progress-nav">';
 
     STEPS.forEach((step, i) => {
       const isDone      = step.n < currentScreen;
       const isActive    = step.n === currentScreen;
-      const isUnlocked  = unlockedScreens.includes(step.n);
+      const isUnlocked  = unlockedScreens && unlockedScreens.includes(step.n);
       const cls         = isDone ? 'done' : (isActive ? 'active' : 'locked');
       const ulCls       = isUnlocked && !isActive ? 'unlocked' : '';
       const clickable   = isUnlocked ? `onclick="window.router.go(${step.n})"` : '';
@@ -67,9 +68,11 @@
   }
 
   function go(screenNum) {
-    const s = appState.s();
-    if (!s.unlockedScreens.includes(screenNum)) return;
-    appState.navigateTo(screenNum);
+    const s = window.appState ? window.appState.s() : { unlockedScreens: [1] };
+    if (s.unlockedScreens && !s.unlockedScreens.includes(screenNum)) return;
+    if (window.appState) {
+      window.appState.navigateTo(screenNum);
+    }
     renderScreen(screenNum);
   }
 
@@ -80,28 +83,30 @@
     const renderFn = SCREEN_RENDERERS[screenNum];
     if (!renderFn) {
       container.innerHTML = `
-        <div class="flex flex-col items-center justify-center h-full gap-3 text-slate-400">
-          <div class="text-5xl">🚧</div>
-          <div class="text-sm font-medium">Screen ${screenNum} coming soon.</div>
+        <div class="flex flex-col items-center justify-center h-full gap-3 text-slate-400 py-16">
+          <div class="text-4xl mb-1">🚧</div>
+          <div class="text-sm font-medium">Screen ${screenNum} is loading…</div>
         </div>`;
       return;
     }
 
-    // Animate out → in
-    container.style.opacity = '0';
-    container.style.transform = 'translateY(6px)';
-    container.style.transition = 'none';
-
-    requestAnimationFrame(() => {
+    // Direct render with safe opacity transition
+    try {
       renderFn(container);
-      container.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
-      requestAnimationFrame(() => {
-        container.style.opacity = '1';
-        container.style.transform = 'translateY(0)';
-      });
-    });
+      container.style.opacity = '1';
+      container.style.transform = 'translateY(0)';
+    } catch (err) {
+      console.error(`Error rendering screen ${screenNum}:`, err);
+      container.innerHTML = `
+        <div class="p-8 text-center text-rose-600 text-sm">
+          Failed to load screen ${screenNum}. Please reset the demo.
+          <button onclick="window.app.reset()" class="block mx-auto mt-3 px-3 py-1 bg-rose-100 rounded text-xs">Reset</button>
+        </div>`;
+    }
 
-    renderProgressNav(appState.s());
+    if (window.appState) {
+      renderProgressNav(window.appState.s());
+    }
   }
 
   // ── Toast utility ────────────────────────────────────────────

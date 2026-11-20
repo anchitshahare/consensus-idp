@@ -5,10 +5,11 @@
  */
 
 (function () {
-  let timerId = null;
 
   function render(container) {
-    const s = appState.s();
+    const appState = window.appState;
+    const esc = window.esc || (x => x);
+    const s = appState ? appState.s() : { workflow: { name: 'Folio Pipeline' } };
 
     container.innerHTML = `
       <div class="max-w-4xl mx-auto px-6 py-8">
@@ -17,7 +18,7 @@
         <div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-200">
           <div>
             <div class="flex items-center gap-2 text-xs font-medium text-slate-400 mb-1">
-              <span>Pipeline: ${esc(s.workflow.name)}</span>
+              <span>Pipeline: ${esc(s.workflow ? s.workflow.name : 'Pipeline')}</span>
               <span>/</span>
               <span class="text-slate-600">DAG Execution</span>
             </div>
@@ -30,7 +31,7 @@
           <div class="flex items-center gap-2">
             <button
               id="btn-skip-run"
-              class="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 bg-white px-3 py-1.5 rounded-lg transition-colors"
+              class="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 bg-white px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
             >
               Skip Animation &rarr;
             </button>
@@ -63,13 +64,13 @@
             <div class="flex items-center gap-2.5 w-full sm:w-auto">
               <button
                 id="btn-goto-dataset-early"
-                class="flex-1 sm:flex-initial text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 px-3.5 py-2.5 rounded-lg shadow-2xs transition-colors"
+                class="flex-1 sm:flex-initial text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 px-3.5 py-2.5 rounded-lg shadow-2xs transition-colors cursor-pointer"
               >
                 View Auto-Approved Data
               </button>
               <button
                 id="btn-goto-hitl"
-                class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-5 py-2.5 rounded-lg shadow-sm transition-colors"
+                class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-5 py-2.5 rounded-lg shadow-sm transition-colors cursor-pointer"
               >
                 Review 7 Flagged Fields &rarr;
               </button>
@@ -84,6 +85,9 @@
   }
 
   function startExecution(container) {
+    const appState = window.appState;
+    const router = window.router;
+
     const term = container.querySelector('#terminal-body');
     const pbar = container.querySelector('#run-progress-bar');
     const title = container.querySelector('#run-status-title');
@@ -104,18 +108,19 @@
       { t: 3000, pct: 100, msg: '<span class="log-ok font-bold">[00:03.0]</span> <strong>Pipeline execution completed successfully in 3.0 seconds.</strong>' }
     ];
 
+    if (!term) return;
     term.innerHTML = '';
 
-    // Play logs over 3000ms
     const timeouts = [];
 
     logs.forEach(item => {
       const id = setTimeout(() => {
+        if (!term) return;
         const line = document.createElement('div');
         line.className = 'log-line';
         line.innerHTML = item.msg;
         term.appendChild(line);
-        pbar.style.width = item.pct + '%';
+        if (pbar) pbar.style.width = item.pct + '%';
         term.scrollTop = term.scrollHeight;
 
         if (item.pct === 100) {
@@ -127,32 +132,38 @@
 
     function finishRun() {
       timeouts.forEach(clearTimeout);
-      spinner.classList.add('hidden');
-      title.textContent = 'Workflow Execution Complete';
-      title.classList.add('text-emerald-700');
-      btnSkip.classList.add('hidden');
-      actions.classList.remove('hidden');
+      if (spinner) spinner.classList.add('hidden');
+      if (title) {
+        title.textContent = 'Workflow Execution Complete';
+        title.classList.add('text-emerald-700');
+      }
+      if (btnSkip) btnSkip.classList.add('hidden');
+      if (actions) actions.classList.remove('hidden');
 
-      // Update state
-      appState.initReviewState();
-      appState.completeRun();
+      if (appState) {
+        appState.initReviewState();
+        appState.completeRun();
+      }
 
-      // Wire next buttons
       const btnHitl = container.querySelector('#btn-goto-hitl');
-      if (btnHitl) btnHitl.onclick = () => router.go(6);
+      if (btnHitl && router) btnHitl.onclick = () => router.go(6);
 
       const btnDs = container.querySelector('#btn-goto-dataset-early');
-      if (btnDs) btnDs.onclick = () => router.go(7);
+      if (btnDs && router) btnDs.onclick = () => router.go(7);
     }
 
-    btnSkip.onclick = () => {
-      timeouts.forEach(clearTimeout);
-      term.innerHTML = logs.map(l => `<div class="log-line">${l.msg}</div>`).join('');
-      pbar.style.width = '100%';
-      finishRun();
-    };
+    if (btnSkip) {
+      btnSkip.onclick = () => {
+        timeouts.forEach(clearTimeout);
+        term.innerHTML = logs.map(l => `<div class="log-line">${l.msg}</div>`).join('');
+        if (pbar) pbar.style.width = '100%';
+        finishRun();
+      };
+    }
   }
 
-  router.register(5, render);
+  if (window.router) {
+    window.router.register(5, render);
+  }
 
 })();

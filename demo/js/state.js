@@ -73,7 +73,18 @@
       if (!saved) return JSON.parse(JSON.stringify(DEFAULT_STATE));
       const parsed = JSON.parse(saved);
       // Validate minimal shape
-      if (typeof parsed.currentScreen !== 'number') throw new Error('invalid');
+      if (typeof parsed.currentScreen !== 'number' || parsed.currentScreen < 1 || parsed.currentScreen > 7) {
+        throw new Error('invalid screen number');
+      }
+      if (!Array.isArray(parsed.unlockedScreens) || parsed.unlockedScreens.length === 0) {
+        parsed.unlockedScreens = [1];
+      }
+      if (!parsed.schema || !Array.isArray(parsed.schema.fields)) {
+        parsed.schema = DEFAULT_STATE.schema;
+      }
+      if (!parsed.workflow || !Array.isArray(parsed.workflow.splitRules)) {
+        parsed.workflow = DEFAULT_STATE.workflow;
+      }
       return parsed;
     } catch (e) {
       return JSON.parse(JSON.stringify(DEFAULT_STATE));

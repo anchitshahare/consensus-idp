@@ -8,7 +8,9 @@
   let selectedNode = 'extraction'; // 'split' | 'extraction'
 
   function render(container) {
-    const s = appState.s();
+    const appState = window.appState;
+    const esc = window.esc || (x => x);
+    const s = appState ? appState.s() : { workflow: { name: 'Folio Pipeline', splitRules: [] }, schema: { name: 'Schema', fields: [] } };
     const wf = s.workflow;
 
     container.innerHTML = `
@@ -30,7 +32,7 @@
 
           <button
             id="btn-continue-workflow"
-            class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm"
+            class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm cursor-pointer"
           >
             Continue to File Upload
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -154,6 +156,7 @@
   }
 
   function renderSplitConfig(wf) {
+    const esc = window.esc || (x => x);
     return `
       <div class="animate-slide-up">
         <div class="flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
@@ -169,7 +172,7 @@
         </p>
 
         <div class="space-y-3 mb-5">
-          ${wf.splitRules.map((rule, idx) => `
+          ${(wf.splitRules || []).map((rule, idx) => `
             <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
               <div class="flex items-center justify-between mb-2">
                 <span class="text-xs font-semibold text-slate-800">Child #${idx + 1}: ${esc(rule.childName)}</span>
@@ -198,6 +201,7 @@
   }
 
   function renderExtractionConfig(wf, schema) {
+    const esc = window.esc || (x => x);
     return `
       <div class="animate-slide-up">
         <div class="flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
@@ -260,13 +264,16 @@
 
         <div class="rounded-lg bg-slate-100 p-2.5 text-[11px] font-mono text-slate-600 flex items-center justify-between">
           <span>Target Schema:</span>
-          <span class="font-semibold text-slate-800">${esc(schema.name)} (${schema.fields.length} keys)</span>
+          <span class="font-semibold text-slate-800">${esc(schema ? schema.name : 'Folio Schema')} (${schema && schema.fields ? schema.fields.length : 10} keys)</span>
         </div>
       </div>
     `;
   }
 
   function wireEvents(container) {
+    const appState = window.appState;
+    const router = window.router;
+
     const nodeSplit = container.querySelector('#dag-node-split');
     const nodeExt = container.querySelector('#dag-node-extraction');
 
@@ -287,12 +294,14 @@
     const btnContinue = container.querySelector('#btn-continue-workflow');
     if (btnContinue) {
       btnContinue.onclick = () => {
-        appState.confirmWorkflow();
-        router.go(4);
+        if (appState) appState.confirmWorkflow();
+        if (router) router.go(4);
       };
     }
   }
 
-  router.register(3, render);
+  if (window.router) {
+    window.router.register(3, render);
+  }
 
 })();

@@ -8,7 +8,9 @@
 (function () {
 
   function render(container) {
-    const s = appState.s();
+    const appState = window.appState;
+    const esc = window.esc || (x => x);
+    const s = appState ? appState.s() : { workspace: null };
 
     container.innerHTML = `
       <div class="max-w-3xl mx-auto px-6 py-10">
@@ -39,8 +41,8 @@
         ${s.workspace ? `
           <div class="mt-8 flex justify-end" id="continue-row">
             <button
-              onclick="router.go(2)"
-              class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors shadow-sm"
+              onclick="window.router.go(2)"
+              class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors shadow-sm cursor-pointer"
             >
               Continue to Schema
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -53,13 +55,16 @@
     `;
 
     // Wire new workspace button
-    document.getElementById('btn-new-workspace').addEventListener('click', openCreateModal);
+    const btnNew = document.getElementById('btn-new-workspace');
+    if (btnNew) btnNew.addEventListener('click', openCreateModal);
   }
 
   // ── Workspace List HTML ──────────────────────────────────────
 
   function renderList(s) {
-    if (!s.workspace) {
+    const esc = window.esc || (x => x);
+
+    if (!s || !s.workspace) {
       return `
         <div class="rounded-xl border border-dashed border-slate-300 bg-white/60 px-10 py-16 text-center">
           <div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
@@ -121,7 +126,6 @@
   // ── Create Modal ─────────────────────────────────────────────
 
   function openCreateModal() {
-    // Remove any existing modal
     const existing = document.getElementById('create-ws-modal');
     if (existing) existing.remove();
 
@@ -137,7 +141,7 @@
         <input
           id="ws-name-input"
           type="text"
-          value="Hospitality Extraction"
+          value="Hospitality Operations"
           placeholder="e.g. Hotel Folio Processing"
           class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
           autocomplete="off"
@@ -154,7 +158,7 @@
           </button>
           <button
             id="btn-confirm-ws"
-            class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors shadow-sm"
+            class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors shadow-sm cursor-pointer"
           >
             Create Workspace
           </button>
@@ -169,43 +173,46 @@
     const confirmBtn = document.getElementById('btn-confirm-ws');
     const cancelBtn = document.getElementById('btn-cancel-ws');
 
-    // Focus input on open
-    setTimeout(() => input.select(), 50);
+    setTimeout(() => { if (input) input.select(); }, 50);
 
-    // Allow Enter key to submit
-    input.addEventListener('keydown', e => {
-      if (e.key === 'Enter') confirmBtn.click();
-      if (e.key === 'Escape') cancelBtn.click();
-    });
+    if (input) {
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') confirmBtn.click();
+        if (e.key === 'Escape') cancelBtn.click();
+      });
+    }
 
-    cancelBtn.addEventListener('click', () => overlay.remove());
+    if (cancelBtn) cancelBtn.addEventListener('click', () => overlay.remove());
 
-    // Click outside to cancel
     overlay.addEventListener('click', e => {
       if (e.target === overlay) overlay.remove();
     });
 
-    confirmBtn.addEventListener('click', () => {
-      const name = input.value.trim();
-      if (!name) {
-        errorEl.classList.remove('hidden');
-        input.focus();
-        return;
-      }
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', () => {
+        const name = input.value.trim();
+        if (!name) {
+          errorEl.classList.remove('hidden');
+          input.focus();
+          return;
+        }
 
-      const ok = appState.createWorkspace(name);
-      if (ok) {
+        if (window.appState) {
+          window.appState.createWorkspace(name);
+        }
         overlay.remove();
-        // Re-render the screen to show the new workspace
         const container = document.getElementById('screen-container');
         if (container) render(container);
-        showToast(`Workspace "${name}" created.`, 'success');
-      }
-    });
+        if (window.showToast) {
+          window.showToast(`Workspace "${name}" created.`, 'success');
+        }
+      });
+    }
   }
 
-  // ── Register with Router ─────────────────────────────────────
-
-  router.register(1, render);
+  // Register with router
+  if (window.router) {
+    window.router.register(1, render);
+  }
 
 })();
