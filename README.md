@@ -6,7 +6,7 @@
 [![Zero Dependencies](https://img.shields.io/badge/Runtime-Vanilla%20JS%20%2B%20Tailwind%20CDN-orange.svg)](#quick-start)
 
 > **Senior Product Manager Portfolio Project**  
-> An enterprise-grade Intelligent Document Processing (IDP) platform that transforms unstructured, multi-page PDF documents into governed, schema-validated analytical data assets using **dual foundation model consensus (Anthropic Claude Sonnet 4.5 & OpenAI GPT-4o)**, **spatial coordinate grounding**, and **cognitive-fatigue-reduced Human-in-the-Loop (HITL) review**.
+> A platform-native Intelligent Document Processing capability that converts unstructured documents into structured, governed datasets integrated into the modern data lifecycle. The product enables organizations to treat documents as authoritative data sources rather than static files. Documents are ingested, analyzed by multiple AI models, validated through consensus and human review, and transformed into structured records with full metadata lineage.
 
 ---
 
