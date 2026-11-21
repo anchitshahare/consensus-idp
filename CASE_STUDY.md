@@ -1,7 +1,7 @@
 # Enterprise Intelligent Document Processing (IDP) Platform: From Unstructured PDFs to Governed Data Assets
 
 > **Role:** Senior Product Manager
-> **Demo URL:** [Interactive Web Demo](demo/index.html)
+> **Demo URL:** [Interactive Web Demo](https://anchitshahare.github.io/consensus-idp/)
 
 ---
 
